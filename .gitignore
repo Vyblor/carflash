@@ -1,0 +1,21 @@
+# Android / Gradle
+.gradle/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
+captures/
+.cxx/
+.externalNativeBuild/
+# secrets
+.env
+*.keystore
+*.jks
+# OS
+.DS_Store
+
+# e2e artifacts
+e2e/out/
+__pycache__/
+*.pyc

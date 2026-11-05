@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- 차량 효과: 앰비언트 조명, 창문, 와이퍼, 송풍 -->
+  <uses-permission android:name="pleos.car.permission.CAR_LIGHTS"/>
+  <uses-permission android:name="pleos.car.permission.CONTROL_CAR_LIGHTS"/>
+  <uses-permission android:name="pleos.car.permission.CAR_WINDOWS"/>
+  <uses-permission android:name="pleos.car.permission.CONTROL_CAR_WINDOWS"/>
+  <uses-permission android:name="pleos.car.permission.READ_WINDSHIELD_WIPERS"/>
+  <uses-permission android:name="pleos.car.permission.CONTROL_WINDSHIELD_WIPERS"/>
+  <uses-permission android:name="pleos.car.permission.CAR_CLIMATE"/>
+  <uses-permission android:name="pleos.car.permission.CONTROL_CAR_CLIMATE"/>
+  <!-- 기어(안전 정지) -->
+  <uses-permission android:name="pleos.car.permission.CAR_DRIVE"/>
+  <uses-permission android:name="android.car.permission.CAR_POWERTRAIN"/>
+  <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+  <!-- 주행 중 화면은 시스템이 막는다(distractionOptimized 선언 없음). 정차 중 전용 앱. -->
+  <application
+      android:name=".CarflashApp"
+      android:label="카플래시"
+      android:icon="@mipmap/ic_launcher"
+      android:theme="@style/Theme.Carflash">
+    <activity
+        android:name=".MainActivity"
+        android:exported="true"
+        android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+        android:launchMode="singleTask">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN"/>
+        <category android:name="android.intent.category.LAUNCHER"/>
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>

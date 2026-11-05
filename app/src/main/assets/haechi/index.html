@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  canvas { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script type="module">
+/* 앱 안 해치. Kotlin이 window.haechi.* 를 부르고, 상태는 HaechiBridge로 돌려준다.
+ * 춤 시간은 Kotlin이 넘겨 준 재생 위치(초)를 기준으로 이어 센다(벽시계가 아니라 곡 위치). */
+import * as THREE from './lib/three.module.js';
+import { createHaechi, createStage, applyEnvironment, POSES, SHOW_COLORS, blendPose, util } from './lib/haechi.js';
+
+const bridge = window.HaechiBridge || { onReady() {}, onFps() {} };
+const canvas = document.getElementById('c');
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+} catch (e) {
+  console.log('HAECHI webgl FAIL ' + e);
+  bridge.onReady(false);
+  throw e;
+}
+renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+renderer.setClearColor(0x000000, 0);
+const scene = new THREE.Scene();
+const stage = createStage(renderer, scene, { theme: 'dark' });
+const h = createHaechi();
+scene.add(h.object);
+const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
+await applyEnvironment(renderer, scene, 0.55);
+
+const S = {
+  state: 'idle', prev: 'idle', since: 0, prevSince: 0, switchAt: -10,
+  bpm: 120, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches,
+  anchorPos: 0, anchorAt: 0, playing: true, yaw: 0.2, framing: 'full', color: null,
+};
+const now = () => performance.now() / 1000;
+function frame(f) {
+  S.framing = f;
+  if (f === 'bust') { cam.fov = 26; cam.position.set(0, 1.6, 5.0); cam.lookAt(0, 1.4, 0); }
+  else { cam.fov = 30; cam.position.set(0, 1.45, 6.8); cam.lookAt(0, 1.0, 0); }
+  cam.updateProjectionMatrix();
+}
+frame('full');
+
+window.haechi = {
+  setState(state, bpm) {
+    if (!(state in POSES)) return;
+    if (bpm) S.bpm = bpm;
+    if (state === S.state) return;
+    const t = now();
+    S.prev = S.state; S.prevSince = S.since; S.state = state; S.since = t; S.switchAt = t;
+    if (state === 'dance') { S.anchorPos = 0; S.anchorAt = t; }
+  },
+  /* 곡 재생 위치(초). 춤 박자의 기준 */
+  setPosition(sec, playing) { S.anchorPos = sec; S.anchorAt = now(); S.playing = playing !== false; },
+  setYaw(y) { S.yaw = y; },
+  setFraming(f) { frame(f); },
+  setColor(hex) { S.color = hex || null; },
+  setReduced(r) { S.reduced = !!r; },
+};
+
+function resize() {
+  const w = canvas.clientWidth || innerWidth, hh = canvas.clientHeight || innerHeight;
+  renderer.setSize(w, hh, false);
+  cam.aspect = w / Math.max(1, hh); cam.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+
+let frames = 0, fpsAt = now();
+function loop() {
+  const t = now();
+  const ctx = { bpm: S.bpm, reduced: S.reduced };
+  const songT = S.playing ? S.anchorPos + (t - S.anchorAt) : S.anchorPos;
+  const local = (st, since) => (st === 'dance' ? songT : t - since);
+  const cur = POSES[S.state](local(S.state, S.since), ctx);
+  const w = util.smooth(Math.min(1, (t - S.switchAt) / 0.35));
+  const pose = w < 1 ? blendPose(POSES[S.prev](local(S.prev, S.prevSince), ctx), cur, w) : cur;
+  h.apply(pose);
+  const live = S.state === 'dance' || S.state === 'cheer';
+  const beat = Math.floor(songT * S.bpm / 60);
+  const col = S.color || SHOW_COLORS[((beat % SHOW_COLORS.length) + SHOW_COLORS.length) % SHOW_COLORS.length];
+  h.setGlow(live ? col : '#ff4d8d');
+  stage.tint(col, live ? 0.75 * pose.glow : 0);
+  h.object.rotation.y = S.yaw;
+  renderer.render(scene, cam);
+  frames++;
+  if (t - fpsAt >= 5) { bridge.onFps(Math.round(frames / (t - fpsAt))); frames = 0; fpsAt = t; }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+const gl = renderer.getContext();
+console.log('HAECHI ready webgl=' + (gl ? (gl.getParameter(gl.VERSION)) : 'none'));
+bridge.onReady(true);
+</script>
+</body>
+</html>

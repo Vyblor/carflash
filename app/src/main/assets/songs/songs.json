@@ -1,0 +1,184 @@
+{
+ "songs": [
+  {
+   "id": "camp_party",
+   "title": "캠핑장 댄스파티",
+   "bpm": 124,
+   "bars": 40,
+   "durationSec": 79.819,
+   "musicSec": 77.419,
+   "asset": "songs/camp_party.ogg",
+   "sections": [
+    {
+     "name": "intro",
+     "bar": 0,
+     "bars": 4
+    },
+    {
+     "name": "verse",
+     "bar": 4,
+     "bars": 8
+    },
+    {
+     "name": "build",
+     "bar": 12,
+     "bars": 4
+    },
+    {
+     "name": "drop",
+     "bar": 16,
+     "bars": 8
+    },
+    {
+     "name": "break",
+     "bar": 24,
+     "bars": 4
+    },
+    {
+     "name": "drop2",
+     "bar": 28,
+     "bars": 8
+    },
+    {
+     "name": "outro",
+     "bar": 36,
+     "bars": 4
+    }
+   ]
+  },
+  {
+   "id": "romantic_drive",
+   "title": "로맨틱 드라이브",
+   "bpm": 100,
+   "bars": 32,
+   "durationSec": 79.2,
+   "musicSec": 76.8,
+   "asset": "songs/romantic_drive.ogg",
+   "sections": [
+    {
+     "name": "intro",
+     "bar": 0,
+     "bars": 4
+    },
+    {
+     "name": "verse",
+     "bar": 4,
+     "bars": 8
+    },
+    {
+     "name": "chorus",
+     "bar": 12,
+     "bars": 8
+    },
+    {
+     "name": "bridge",
+     "bar": 20,
+     "bars": 4
+    },
+    {
+     "name": "chorus2",
+     "bar": 24,
+     "bars": 4
+    },
+    {
+     "name": "outro",
+     "bar": 28,
+     "bars": 4
+    }
+   ]
+  },
+  {
+   "id": "sweet_night",
+   "title": "감미로운 밤",
+   "bpm": 80,
+   "bars": 20,
+   "durationSec": 62.4,
+   "musicSec": 60.0,
+   "asset": "songs/sweet_night.ogg",
+   "sections": [
+    {
+     "name": "intro",
+     "bar": 0,
+     "bars": 2
+    },
+    {
+     "name": "verse",
+     "bar": 2,
+     "bars": 8
+    },
+    {
+     "name": "chorus",
+     "bar": 10,
+     "bars": 6
+    },
+    {
+     "name": "outro",
+     "bar": 16,
+     "bars": 4
+    }
+   ]
+  },
+  {
+   "id": "birthday_party",
+   "title": "생일 축하 파티",
+   "bpm": 120,
+   "bars": 22,
+   "durationSec": 46.4,
+   "musicSec": 44.0,
+   "asset": "songs/birthday_party.ogg",
+   "sections": [
+    {
+     "name": "intro",
+     "bar": 0,
+     "bars": 2
+    },
+    {
+     "name": "verse",
+     "bar": 2,
+     "bars": 8
+    },
+    {
+     "name": "chorus",
+     "bar": 10,
+     "bars": 8
+    },
+    {
+     "name": "outro",
+     "bar": 18,
+     "bars": 4
+    }
+   ]
+  },
+  {
+   "id": "rainy_parking",
+   "title": "비 오는 주차장",
+   "bpm": 88,
+   "bars": 24,
+   "durationSec": 67.855,
+   "musicSec": 65.455,
+   "asset": "songs/rainy_parking.ogg",
+   "sections": [
+    {
+     "name": "intro",
+     "bar": 0,
+     "bars": 4
+    },
+    {
+     "name": "verse",
+     "bar": 4,
+     "bars": 8
+    },
+    {
+     "name": "chorus",
+     "bar": 12,
+     "bars": 8
+    },
+    {
+     "name": "outro",
+     "bar": 20,
+     "bars": 4
+    }
+   ]
+  }
+ ]
+}
