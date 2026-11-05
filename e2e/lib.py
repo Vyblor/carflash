@@ -45,8 +45,18 @@ def logclear():
     sh("logcat", "-c", check=False)
 
 
-def start():
-    shell(f"am start --user {USER} -W -n {PKG}/.MainActivity")
+def start(countdown_ms=None, offset_ms=None, offline=None, width_dp=None):
+    """디버그 빌드 시험 옵션: 카운트다운 길이, 곡 중간부터 시작, 오프라인 흉내."""
+    extra = ""
+    if countdown_ms is not None:
+        extra += f" --el cf_countdown_ms {countdown_ms}"
+    if offset_ms is not None:
+        extra += f" --el cf_offset_ms {offset_ms}"
+    if offline is not None:
+        extra += f" --ez cf_offline {'true' if offline else 'false'}"
+    if width_dp is not None:
+        extra += f" --ei cf_width_dp {width_dp}"
+    shell(f"am start --user {USER} -W -n {PKG}/.MainActivity{extra}")
 
 
 def stop():
@@ -94,7 +104,17 @@ def dump():
         if "dumped" in out:
             xml = shell("cat /sdcard/cf.xml")
             try:
-                return [Node(e) for e in ET.fromstring(xml).iter("node")]
+                nodes = []
+                for e in ET.fromstring(xml).iter("node"):
+                    n = Node(e)
+                    # Compose는 탭 가능한 노드의 설명을 같은 크기 자식 노드로 내보내기도 한다. 그 설명을 부모(태그 노드)에 올린다.
+                    if n.rid and not n.desc:
+                        for c in e.findall("node"):
+                            if c.get("content-desc") and c.get("bounds") == e.get("bounds"):
+                                n.desc = c.get("content-desc")
+                                break
+                    nodes.append(n)
+                return nodes
             except ET.ParseError:
                 pass
         time.sleep(0.5)
@@ -168,6 +188,11 @@ def state():
     return console("GET", "/vehicle/state")
 
 
+def soc(v):
+    """배터리 잔량(%)을 콘솔로 바꾼다."""
+    return console("PUT", f"/vehicle/ev-battery?field=soc&value={v}")
+
+
 # ---------- 판정 ----------
 def check(name, ok, detail=""):
     mark = "PASS" if ok else "FAIL"
@@ -182,3 +207,71 @@ def summary():
         print(f"\n{len(FAILS)} FAIL: {FAILS}")
         raise SystemExit(1)
     print("\nALL PASS")
+
+
+# ---------- 공통 흐름 ----------
+APK = os.path.join(os.path.dirname(HERE), "app", "build", "outputs", "apk", "debug", "app-debug.apk")
+
+
+def fresh(install_apk=True, onboard=True):
+    """앱을 지우고 새로 켠 뒤 홈까지 간다."""
+    if install_apk:
+        install(APK)
+    gear("Park")
+    # 기준 상태: 흰색이 아닌 색으로 두어야 "원래 색 복원"을 가려낼 수 있다
+    baseline()
+    stop()
+    clear()
+    logclear()
+    start()
+    if onboard:
+        n = wait("onboard_start", timeout=15)
+        if n:
+            tap("onboard_start")
+        wait("screen_home", timeout=10)
+        # 차량 기능 점검(SDK 초기화 약 2.5초) 끝날 때까지
+        wait_log(r"VEH cap fan", timeout=10)
+
+
+def baseline():
+    """시험 전 차를 정해진 상태로: 보라 30%, 창문 닫힘, 와이퍼 끔, 송풍 3단."""
+    console("PUT", "/vehicle/body?ambient_color=%23aa00ff")
+    console("PUT", "/vehicle/body?ambient_brightness=30")
+    for k in ("window_fl", "window_fr", "window_rl", "window_rr"):
+        console("PUT", f"/vehicle/body?{k}=0")
+    console("PUT", "/vehicle/body?front_wiper=Off")
+    console("PUT", "/vehicle/hvac?fan_speed=3")
+    time.sleep(0.5)
+
+
+def car():
+    """콘솔에서 읽은 차 상태 요약."""
+    s = state()
+    b = s["body"]
+    return {
+        "color": b["ambient_light"]["color"].lower(),
+        "bright": b["ambient_light"]["brightness_pct"],
+        "windows": [b["windows"][k] for k in ("front_left", "front_right", "rear_left", "rear_right")],
+        "wiper": b["wipers"]["front"]["mode"],
+        "fan": s["hvac"]["fan_speed"],
+        "gear": s["gear"]["actual"]["value"],
+        "soc": s.get("ev_battery", {}).get("state_of_charge"),
+    }
+
+
+def open_show(show_id):
+    """홈에서 플래시몹을 연다(오늘의 플래시몹이면 큰 타일)."""
+    show_id = show_id if show_id.startswith("p_") or show_id.startswith("m_") or show_id.startswith("f_") else "p_" + show_id
+    n = find(f"show_{show_id}")
+    if n is None:
+        # 오른쪽 목록을 아래로 밀어 본다
+        shell("input swipe 1900 1100 1900 500 300")
+        time.sleep(0.6)
+        n = find(f"show_{show_id}")
+    if n is None:
+        tap("home_today")  # 오늘의 플래시몹이 바로 그것
+
+    else:
+        x, y = n.center
+        shell(f"input tap {x} {y}")
+    return wait("screen_prep", timeout=6)

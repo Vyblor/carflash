@@ -64,6 +64,7 @@ fun HomeScreen(
     gear: Gear,
     repo: ShowRepository,
     today: Show,
+    mine: List<Show>,
     recent: List<Show>,
     online: Boolean,
     banner: (@Composable () -> Unit)?,
@@ -86,6 +87,10 @@ fun HomeScreen(
                 Tiles(online, short = true, a)
                 Text("추천 플래시몹", style = CfType.title, color = Cf.text)
                 recommended.forEach { ShowRow(it, repo, a.openShow) }
+                if (mine.isNotEmpty()) {
+                    Text("내 플래시몹", style = CfType.title, color = Cf.text)
+                    mine.reversed().forEach { ShowRow(it, repo, a.openShow) }
+                }
                 if (recent.isNotEmpty()) {
                     Text("최근", style = CfType.title, color = Cf.text)
                     recent.forEach { ShowRow(it, repo, a.openShow) }
@@ -112,6 +117,10 @@ fun HomeScreen(
                             if (pair.size == 1) Box(Modifier.weight(1f))
                         }
                     }
+                    if (mine.isNotEmpty()) {
+                        Text("내 플래시몹", style = CfType.title, color = Cf.text, modifier = Modifier.padding(top = 8.dp))
+                        mine.reversed().forEach { ShowRow(it, repo, a.openShow) }
+                    }
                     if (recent.isNotEmpty()) {
                         Text("최근", style = CfType.title, color = Cf.text, modifier = Modifier.padding(top = 8.dp))
                         recent.forEach { ShowRow(it, repo, a.openShow) }
@@ -136,7 +145,8 @@ private fun HeroTile(show: Show, repo: ShowRepository, modifier: Modifier, open:
     Box(
         modifier.clip(RoundedCornerShape(Cf.rLg)).clickable(role = Role.Button) { open(show) }.testTag("home_today"),
     ) {
-        Cover(show.cover, show.gradient, Modifier.fillMaxSize())
+        // 큰 타일 위에는 움직이는 해치가 따로 올라가므로 해치 없는 배경판을 쓴다
+        Cover(show.cover?.replace(".jpg", "_bg.jpg"), show.gradient, Modifier.fillMaxSize())
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xCC131417)), startY = 120f)))
         Column(Modifier.align(Alignment.BottomStart).padding(48.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("오늘의 플래시몹 · 누르면 바로 준비", style = CfType.label, color = Color.White.copy(alpha = 0.85f))

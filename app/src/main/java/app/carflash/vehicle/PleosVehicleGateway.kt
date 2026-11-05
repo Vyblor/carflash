@@ -90,6 +90,8 @@ class PleosVehicleGateway(private val context: Context) : VehicleGateway {
             })
         } catch (e: Exception) { log("VEH gear register failed $e") }
 
+        pollBattery()
+
         val light = vehicle.getLight()
         light.checkAmbientLightBrightnessColorCapabilities({ c, areas ->
             seats = areas.toList(); hasLight = seats.isNotEmpty(); publishCaps()
@@ -109,6 +111,20 @@ class PleosVehicleGateway(private val context: Context) : VehicleGateway {
             m.values.firstOrNull()?.let { b -> fanMax = (b.maxValue as? Number)?.toInt() ?: 8 }
             publishCaps(); log("VEH cap fan ${c.accessType} max=$fanMax")
         }, { e -> log("VEH cap fan failed $e"); publishCaps() })
+    }
+
+    /** 배터리 SOC(%). 문서: Vehicle SDK getEvBatteryStateOfCharge(권한 CAR_ENERGY). 3초마다 묻는다. */
+    private fun pollBattery() {
+        try {
+            vehicle.getEvBattery().getEvBatteryStateOfCharge({ v: Any? ->
+                val n = (v as? Number)?.toInt()
+                if (n != battery.value) log("VEH battery soc=$n")
+                battery.value = n
+            }, { e: Exception -> log("VEH battery failed $e") })
+        } catch (e: Throwable) {
+            log("VEH battery threw $e")
+        }
+        main.postDelayed({ pollBattery() }, 3000)
     }
 
     private fun publishCaps() {
@@ -154,7 +170,11 @@ class PleosVehicleGateway(private val context: Context) : VehicleGateway {
         vehicle.getHVAC().setHvacFanSpeed(a, level.coerceIn(1, fanMax), { _, _ -> }, { e -> log("VEH set fan failed $e") })
     }
 
+    /** 조회 한 번 실패하면 한 번 더 묻는다(실패 값으로 복원하면 원래 색 대신 흰색이 된다). */
     private suspend fun <T> ask(block: (ok: (T?) -> Unit, fail: (Exception) -> Unit) -> Unit): T? =
+        ask1(block) ?: ask1(block)
+
+    private suspend fun <T> ask1(block: (ok: (T?) -> Unit, fail: (Exception) -> Unit) -> Unit): T? =
         withTimeoutOrNull(1500) {
             suspendCancellableCoroutine { cont ->
                 try {
@@ -185,7 +205,8 @@ class PleosVehicleGateway(private val context: Context) : VehicleGateway {
 
     override fun restore(s: VehicleSnapshot) {
         log("VEH restore $s t=${System.currentTimeMillis()}")
-        s.ambient.forEachIndexed { i, c -> setAmbient(i, c ?: 0xFFFFFF) }
+        // 창문은 모르면 닫는다(안전). 조명은 모르면 흰색·50%로 둔다.
+        s.ambient.forEachIndexed { i, c -> if (c == null) log("VEH restore ambient[$i] unknown → white"); setAmbient(i, c ?: 0xFFFFFF) }
         s.brightness.forEachIndexed { i, b -> setBrightness(i, b ?: 50) }
         s.windows.forEachIndexed { i, w -> setWindow(i, w ?: 0) }
         setWiper(s.wiper ?: WiperMode.OFF)

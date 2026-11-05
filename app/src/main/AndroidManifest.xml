@@ -11,8 +11,11 @@
   <uses-permission android:name="pleos.car.permission.CONTROL_CAR_CLIMATE"/>
   <!-- 기어(안전 정지) -->
   <uses-permission android:name="pleos.car.permission.CAR_DRIVE"/>
+  <!-- 배터리 보호(E3) -->
+  <uses-permission android:name="pleos.car.permission.CAR_ENERGY"/>
   <uses-permission android:name="android.car.permission.CAR_POWERTRAIN"/>
   <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
@@ -33,5 +36,10 @@
         <category android:name="android.intent.category.LAUNCHER"/>
       </intent-filter>
     </activity>
+    <!-- 플래시몹 중 프로세스 유지(E1 주행 차단 화면에 가려져도 복원) -->
+    <service android:name=".show.ShowService" android:exported="false" android:foregroundServiceType="specialUse">
+      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="Parked-only in-car light show: keeps restoring vehicle state when the driver shifts out of Park"/>
+    </service>
   </application>
 </manifest>
