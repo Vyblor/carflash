@@ -115,6 +115,7 @@ fun CapsPanel(caps: VehicleCaps?) {
                 Effect.WINDOW -> caps.window to "창문 ${caps.windows}개"
                 Effect.WIPER -> caps.wiper to "앞 와이퍼"
                 Effect.FAN -> caps.fan to "송풍 1~${caps.fanMax}단"
+                Effect.HEADLAMP -> caps.headlamp to "전조등·미등"
             }
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(Cf.rMd)).background(if (ok) Cf.okSoft else Cf.surface2)

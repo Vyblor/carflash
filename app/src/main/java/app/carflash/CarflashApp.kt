@@ -3,6 +3,7 @@ package app.carflash
 import android.app.Application
 import android.content.Context
 import app.carflash.data.Effect
+import app.carflash.data.has
 import app.carflash.show.BatteryGuard
 import app.carflash.data.MockGroupServer
 import app.carflash.data.ShowRepository
@@ -47,7 +48,7 @@ class CarflashApp : Application() {
             val c = vehicle.caps.value
             val low = BatteryGuard.low(vehicle.battery.value)
             val fx = show.effects.filter { e ->
-                (c == null || when (e) { Effect.LIGHT -> c.light; Effect.WINDOW -> c.window; Effect.WIPER -> c.wiper; Effect.FAN -> c.fan }) &&
+                (c == null || c.has(e)) &&
                     !(low && (e == Effect.WINDOW || e == Effect.FAN))
             }.toSet()
             engine.start(show, fx, true, startAtMs = groups.localAt(r.startAtServer ?: groups.serverNow()), group = groups.info(r))

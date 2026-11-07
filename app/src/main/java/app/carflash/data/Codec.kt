@@ -1,5 +1,6 @@
 package app.carflash.data
 
+import app.carflash.show.LampPattern
 import app.carflash.show.Pattern
 import app.carflash.show.SectionPlan
 import app.carflash.vehicle.WiperMode
@@ -22,7 +23,7 @@ object Codec {
             JSONObject().apply {
                 put("name", p.name); put("bar", p.bar); put("bars", p.bars)
                 put("colors", JSONArray(p.colors)); put("pattern", p.pattern.name)
-                put("window", p.window); put("wiper", p.wiper.name); put("fan", p.fan)
+                put("window", p.window); put("wiper", p.wiper.name); put("fan", p.fan); put("lamp", p.lamp.name)
             }
         }))
     }
@@ -33,7 +34,8 @@ object Codec {
             (0 until a.length()).map { i ->
                 val p = a.getJSONObject(i)
                 SectionPlan(p.getString("name"), p.getInt("bar"), p.getInt("bars"), ints(p.getJSONArray("colors")),
-                    Pattern.valueOf(p.getString("pattern")), p.getInt("window"), WiperMode.valueOf(p.getString("wiper")), p.getInt("fan"))
+                    Pattern.valueOf(p.getString("pattern")), p.getInt("window"), WiperMode.valueOf(p.getString("wiper")), p.getInt("fan"),
+                    LampPattern.entries.firstOrNull { it.name == p.optString("lamp") } ?: LampPattern.NONE)
             }
         } ?: emptyList()
         val eff = o.getJSONArray("effects").let { a -> (0 until a.length()).map { Effect.valueOf(a.getString(it)) }.toSet() }

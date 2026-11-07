@@ -3,6 +3,7 @@ package app.carflash.vehicle
 import ai.pleos.playground.vehicle.Vehicle
 import ai.pleos.playground.vehicle.api.model.area.SeatArea
 import ai.pleos.playground.vehicle.api.model.area.WindowArea
+import ai.pleos.playground.vehicle.constant.control.LightSwitch
 import ai.pleos.playground.vehicle.constant.control.VehicleGear
 import ai.pleos.playground.vehicle.constant.control.WiperSwitch
 import ai.pleos.playground.vehicle.listener.GearSelectionListener
@@ -41,6 +42,11 @@ class PleosVehicleGateway(private val context: Context) : VehicleGateway {
     private var hasWindow = false
     private var hasWiper = false
     private var hasFan = false
+    private var hasLow = false
+    private var hasTail = false
+    /** D단에서 조명 복원이 거부되면(50001) 여기에 두었다가 P로 돌아올 때 다시 보낸다. */
+    private var lampRetry: Pair<String?, String?>? = null
+    private var lampRetryAt = 0L
     private var fanMax = 8
     private var windowMax = 10
 
@@ -85,6 +91,11 @@ class PleosVehicleGateway(private val context: Context) : VehicleGateway {
                     val m = mapGear(g)
                     log("VEH gear raw=$g mapped=$m t=${System.currentTimeMillis()}")
                     gear.value = m
+                    // 10분이 지난 복원은 버린다(그 사이 운전자가 직접 바꾼 스위치를 덮지 않게)
+                    if (m == Gear.P) lampRetry?.let { (lo, ta) ->
+                        lampRetry = null
+                        if (System.currentTimeMillis() - lampRetryAt < 10 * 60_000) { log("VEH lamp restore retry at P"); restoreLamp(lo, ta) }
+                    }
                 }
                 override fun onFailed(e: Exception) { log("VEH gear listener failed $e") }
             })
@@ -111,6 +122,11 @@ class PleosVehicleGateway(private val context: Context) : VehicleGateway {
             m.values.firstOrNull()?.let { b -> fanMax = (b.maxValue as? Number)?.toInt() ?: 8 }
             publishCaps(); log("VEH cap fan ${c.accessType} max=$fanMax")
         }, { e -> log("VEH cap fan failed $e"); publishCaps() })
+        // 외부 조명(전조등·미등). 문서: Light check*LightSwitchCapabilities. 시험: 2026-11-07 LightProbe.
+        light.checkLowBeamLightSwitchCapabilities({ m -> hasLow = m.contains(LightSwitch.ON); publishCaps(); log("VEH cap lowBeam $m") },
+            { e -> log("VEH cap lowBeam failed $e") })
+        light.checkTailLampLightSwitchCapabilities({ m -> hasTail = m.contains(LightSwitch.ON); publishCaps(); log("VEH cap tailLamp $m") },
+            { e -> log("VEH cap tailLamp failed $e") })
     }
 
     /** 배터리 SOC(%). 문서: Vehicle SDK getEvBatteryStateOfCharge(권한 CAR_ENERGY). 3초마다 묻는다. */
@@ -131,7 +147,7 @@ class PleosVehicleGateway(private val context: Context) : VehicleGateway {
         caps.value = VehicleCaps(
             ambientZones = if (hasLight) seats.size else 0,
             windows = if (hasWindow) windowAreas.size else 0,
-            wiper = hasWiper, fan = hasFan, fanMax = fanMax, windowMax = windowMax,
+            wiper = hasWiper, fan = hasFan, fanMax = fanMax, windowMax = windowMax, headlamp = hasLow && hasTail,
         )
     }
 
@@ -170,6 +186,39 @@ class PleosVehicleGateway(private val context: Context) : VehicleGateway {
         vehicle.getHVAC().setHvacFanSpeed(a, level.coerceIn(1, fanMax), { _, _ -> }, { e -> log("VEH set fan failed $e") })
     }
 
+    private fun lowBeam(v: LightSwitch, then: () -> Unit = {}, failed: (Exception) -> Unit = {}) {
+        if (!hasLow) return
+        vehicle.getLight().setLowBeamLightSwitch(v, { _ -> then() }, { e -> log("VEH set lowBeam $v failed $e"); failed(e) })
+    }
+
+    private fun tailLamp(v: LightSwitch, then: () -> Unit = {}, failed: (Exception) -> Unit = {}) {
+        if (!hasTail) return
+        vehicle.getLight().setTailLampLightSwitch(v, { _ -> then() }, { e -> log("VEH set tailLamp $v failed $e"); failed(e) })
+    }
+
+    /** 스위치는 하나의 상태(끔/미등/전조등)라 전조등을 끄면 미등도 꺼진다. 그래서 미등은 켜기만, 끔은 전조등 끄기 뒤 미등 끄기 순서로. */
+    override fun setLamp(mode: LampMode) {
+        log("VEH lamp $mode")
+        when (mode) {
+            LampMode.LOW -> lowBeam(LightSwitch.ON)
+            LampMode.TAIL -> tailLamp(LightSwitch.ON)
+            LampMode.OFF -> lowBeam(LightSwitch.OFF, then = { tailLamp(LightSwitch.OFF) })
+        }
+    }
+
+    private fun sw(name: String?): LightSwitch? = name?.let { n -> LightSwitch.entries.firstOrNull { it.name == n } }
+
+    /** 원래 스위치로. 전조등이 켜져 있었으면 전조등만, 미등만이었으면 전조등 끈 뒤 미등. 거부되면(D단) P에서 다시. */
+    private fun restoreLamp(lo: String?, ta: String?) {
+        if (!hasLow || !hasTail || (lo == null && ta == null)) return
+        val low = sw(lo) ?: LightSwitch.OFF
+        val tail = sw(ta) ?: LightSwitch.OFF
+        log("VEH lamp restore low=$lo tail=$ta")
+        val retry: (Exception) -> Unit = { lampRetry = lo to ta; lampRetryAt = System.currentTimeMillis() }
+        if (low != LightSwitch.OFF) lowBeam(low, failed = retry)
+        else lowBeam(LightSwitch.OFF, then = { tailLamp(tail, failed = retry) }, failed = retry)
+    }
+
     /** 조회 한 번 실패하면 한 번 더 묻는다(실패 값으로 복원하면 원래 색 대신 흰색이 된다). */
     private suspend fun <T> ask(block: (ok: (T?) -> Unit, fail: (Exception) -> Unit) -> Unit): T? =
         ask1(block) ?: ask1(block)
@@ -198,7 +247,9 @@ class PleosVehicleGateway(private val context: Context) : VehicleGateway {
             WiperSwitch.CONTINUOUS_LEVEL_3 -> WiperMode.HIGH
             else -> WiperMode.LOW
         }
-        val s = VehicleSnapshot(amb, br, win, wm, fan)
+        val lo = if (hasLow) ask<LightSwitch> { ok, f -> l.getLowBeamLightSwitch({ v -> ok(v) }, f) } else null
+        val ta = if (hasTail) ask<LightSwitch> { ok, f -> l.getTailLampLightSwitch({ v -> ok(v) }, f) } else null
+        val s = VehicleSnapshot(amb, br, win, wm, fan, lowBeam = lo?.name, tailLamp = ta?.name)
         log("VEH snapshot $s")
         return s
     }
@@ -211,5 +262,6 @@ class PleosVehicleGateway(private val context: Context) : VehicleGateway {
         s.windows.forEachIndexed { i, w -> setWindow(i, w ?: 0) }
         setWiper(s.wiper ?: WiperMode.OFF)
         s.fan?.let { setFan(it) }
+        restoreLamp(s.lowBeam, s.tailLamp)
     }
 }

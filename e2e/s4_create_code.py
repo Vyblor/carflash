@@ -42,8 +42,9 @@ def main(install=True):
     nodes = lib.dump()
     cells = [n for n in nodes if n.rid.startswith("cell_")]
     tracks = sorted({n.rid.split("_")[1] for n in cells})
-    lib.check("C2 트랙 = 차가 지원하는 4개", tracks == ["FAN", "LIGHT", "WINDOW", "WIPER"], str(tracks))
-    lib.check("C2 한 쪽 4마디", len(cells) == 16, str(len(cells)))
+    # S7(11-07)에서 전조등 트랙이 더해져 5개
+    lib.check("C2 트랙 = 차가 지원하는 5개", tracks == ["FAN", "HEADLAMP", "LIGHT", "WINDOW", "WIPER"], str(tracks))
+    lib.check("C2 한 쪽 4마디", len(cells) == 20, str(len(cells)))
     lib.check("C2 추천에서 시작 → 칸이 채워져 있음", lib.find("cell_LIGHT_0", nodes=nodes).desc.split(":")[3] != "NONE", lib.find("cell_LIGHT_0", nodes=nodes).desc)
     lib.tap("cell_LIGHT_0")
     lib.tap("block_light_solid_cyan")

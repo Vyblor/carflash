@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.carflash.data.Effect
+import app.carflash.data.has
 import app.carflash.data.GroupInfo
 import app.carflash.data.Show
 import app.carflash.data.Song
@@ -55,10 +56,15 @@ import app.carflash.ui.components.Banner
 import app.carflash.ui.components.BannerKind
 import app.carflash.ui.components.BtnKind
 import app.carflash.ui.components.CarMap
+import app.carflash.ui.components.EffectBadge
+import app.carflash.vehicle.LampMode
+import app.carflash.vehicle.WiperMode
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
 import app.carflash.ui.components.CfButton
 import app.carflash.ui.components.CodeDisplay
 import app.carflash.ui.components.Cover
-import app.carflash.ui.components.CueChip
 import app.carflash.ui.components.FxToggle
 import app.carflash.ui.components.GearChip
 import app.carflash.ui.components.HaechiView
@@ -86,22 +92,53 @@ internal fun josa(enabled: Set<Effect>): String {
     return if (ch in '가'..'힣' && (ch - '가') % 28 != 0) "은" else "는"
 }
 
-private fun capOk(e: Effect, caps: VehicleCaps?) = caps != null && when (e) {
-    Effect.LIGHT -> caps.light; Effect.WINDOW -> caps.window; Effect.WIPER -> caps.wiper; Effect.FAN -> caps.fan
-}
+private fun capOk(e: Effect, caps: VehicleCaps?) = caps != null && caps.has(e)
 
 private fun fxSub(e: Effect, caps: VehicleCaps?, plans: List<SectionPlan>): String = when (e) {
     Effect.LIGHT -> if ((caps?.ambientZones ?: 0) > 1) "앰비언트 ${caps!!.ambientZones}구역" else "앰비언트 조명"
     Effect.WINDOW -> "최대 ${plans.maxOfOrNull { it.window } ?: WINDOW_LIMIT}%까지 내려가요"
     Effect.WIPER -> "앞 와이퍼 · 천천히"
     Effect.FAN -> "1열 · 최대 ${plans.maxOfOrNull { it.fan } ?: 5}단"
+    Effect.HEADLAMP -> "전조등·미등 깜빡임 · 정차 중에만"
 }
 
-private fun mapOf(f: Frame?, enabled: Set<Effect>): Triple<List<Int?>, List<Int>, Int?> {
-    if (f == null) return Triple(List(5) { null }, List(4) { 0 }, null)
+/** 차 그림 한 장에 필요한 값. active = 이 구간에서 움직이는 효과(왼쪽 목록과 같은 기준). */
+internal data class Look(val zones: List<Int?>, val windows: List<Int>, val fan: Int?, val wiper: Boolean, val lamp: LampMode?, val active: Set<Effect>)
+
+internal fun lookOf(f: Frame?, enabled: Set<Effect>): Look {
+    val lampIdle = if (Effect.HEADLAMP in enabled) LampMode.OFF else null
+    if (f == null) return Look(List(5) { null }, List(4) { 0 }, null, false, lampIdle, emptySet())
     val z = if (Effect.LIGHT in enabled) f.zones.map { if (it < 0) null else it } else List(5) { null }
-    val w = f.windows.map { if (it < 0) 0 else it * 100 / 100 }
-    return Triple(z, w, f.fan.takeIf { it > 0 })
+    val w = f.windows.map { if (it < 0) 0 else it }
+    return Look(z, w, f.fan.takeIf { it > 0 }, f.wiper != WiperMode.OFF, f.lamp ?: lampIdle, f.cues.map { it.effect }.toSet())
+}
+
+@Composable
+internal fun LookMap(l: Look, enabled: Set<Effect>, width: Dp, modifier: Modifier = Modifier, describe: Boolean = true, badges: Boolean = true) =
+    CarMap(l.zones, l.windows, l.fan, width, modifier, describe = describe, wiper = l.wiper, lamp = l.lamp,
+        badges = if (badges) enabled else emptySet(), active = l.active)
+
+/**
+ * 재생 화면 왼쪽 한 줄: 아이콘 배지(차 그림 위 배지와 같은 모양) · 효과 이름 · 지금 하는 일.
+ * 움직이지 않는 효과도 "쉬는 중"으로 남겨 둬서, 차 그림의 어느 부분이 무엇인지 늘 짝지어 볼 수 있다.
+ */
+@Composable
+private fun EffectRow(e: Effect, cue: String?, color: Int?) {
+    val on = cue != null
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(Cf.rMd)).background(if (on) Cf.surface2 else Cf.surface)
+            .padding(horizontal = 20.dp, vertical = 10.dp)
+            .testTag("cue_${e.name}").semantics { contentDescription = "cue:${e.name}:${cue ?: "idle"}" },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        EffectBadge(e, on, 48.dp)
+        Column(Modifier.weight(1f)) {
+            Text(e.label, style = CfType.caption, color = Cf.text2)
+            Text(cue ?: "쉬는 중", style = CfType.label, color = if (on) Cf.text else Cf.text3)
+        }
+        if (on && color != null) Box(Modifier.size(24.dp).clip(CircleShape).background(Color(0xFF000000.toInt() or color)))
+    }
 }
 
 /** A3 플래시몹 준비 (B2 친구 플래시몹·차종 차이 포함). 창문 같은 움직임을 먼저 알리고, 끌 수 있게 한다. */
@@ -183,8 +220,7 @@ fun PrepScreen(
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     Column(Modifier.align(Alignment.TopCenter), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
                         Text("첫 장면 미리보기", style = CfType.label, color = Cf.text2)
-                        val (z, w, f) = mapOf(first, enabled)
-                        CarMap(z, w, f, 400.dp)
+                        LookMap(lookOf(first, enabled), enabled, 400.dp)
                     }
                     HaechiView(HaechiState.HELLO, 240.dp, Modifier.align(Alignment.BottomEnd))
                 }
@@ -227,7 +263,7 @@ fun CountdownScreen(show: Show, secondsLeft: Int, enabled: Set<Effect>, gear: Ge
                     HaechiView(HaechiState.WAIT, if (port) 300.dp else 380.dp, Modifier.align(Alignment.CenterVertically))
                     if (!port) {
                         Spacer(Modifier.width(48.dp))
-                        CarMap(List(5) { null }, List(4) { 0 }, null, 340.dp, Modifier.align(Alignment.CenterVertically))
+                        LookMap(lookOf(null, enabled), enabled, 340.dp, Modifier.align(Alignment.CenterVertically))
                     }
                 }
             }
@@ -241,7 +277,8 @@ fun CountdownScreen(show: Show, secondsLeft: Int, enabled: Set<Effect>, gear: Ge
 fun PlayingScreen(show: Show, song: Song, posMs: Long, frame: Frame?, enabled: Set<Effect>, gear: Gear, group: GroupInfo? = null, onStop: () -> Unit) {
     val port = LocalLayout.current == Layout.Portrait
     val total = (song.durationSec * 1000).toLong()
-    val (z, w, f) = mapOf(frame, enabled)
+    val look = lookOf(frame, enabled)
+    val z = look.zones
     val c0 = z.firstOrNull() ?: 0xA05CFF
     val c1 = z.getOrNull(3) ?: 0x00E5FF
     Box(Modifier.fillMaxSize().background(Cf.bg).testTag("screen_playing")
@@ -254,15 +291,19 @@ fun PlayingScreen(show: Show, song: Song, posMs: Long, frame: Frame?, enabled: S
                 GearChip(gear)
             }
             Row(Modifier.weight(1f).padding(horizontal = 48.dp)) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text("지금 움직이는 것", style = CfType.label, color = Cf.text2)
-                    frame?.cues?.forEachIndexed { i, cue ->
-                        CueChip(cue, color = if (i == 0 && Effect.LIGHT in enabled) z.firstOrNull() else null)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("지금 차에서 움직이는 것", style = CfType.label, color = Cf.text2)
+                    Effect.entries.filter { it in enabled }.forEach { e ->
+                        val cue = frame?.cues?.firstOrNull { it.effect == e }?.text
+                        EffectRow(e, cue, if (e == Effect.LIGHT) z.firstOrNull() else null)
                     }
                     Spacer(Modifier.weight(1f))
-                    HaechiView(HaechiState.DANCE, if (port) 320.dp else 460.dp, Modifier.align(Alignment.CenterHorizontally), bpm = song.bpm)
+                    HaechiView(HaechiState.DANCE, if (port) 320.dp else 400.dp, Modifier.align(Alignment.CenterHorizontally), bpm = song.bpm)
                 }
-                if (!port) CarMap(z, w, f, 430.dp, Modifier.align(Alignment.CenterVertically), describe = false)
+                if (!port) {
+                    Spacer(Modifier.width(48.dp))
+                    LookMap(look, enabled, 430.dp, Modifier.align(Alignment.CenterVertically), describe = false)
+                }
             }
             Row(Modifier.fillMaxWidth().padding(32.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(48.dp)) {
                 StopButton(if (group != null) (if (port) "내 차만" else "내 차만 멈추기") else if (port) "멈추기" else "플래시몹 멈추기", onClick = onStop)
@@ -303,6 +344,12 @@ fun ResultScreen(
                     Text(stopReason!!.detail, style = CfType.caption, color = Cf.text2, modifier = Modifier.testTag("stop_detail"))
                     Banner("차 상태를 플래시몹 전으로 되돌렸어요", restored.ifEmpty { "바뀐 것 없음" }, BannerKind.Ok,
                         Modifier.testTag("banner_restored").semantics { contentDescription = "restored:$restored" })
+                }
+                // 전조등: 차가 AUTO를 앱에 OFF로 알려 주고(에뮬레이터 시험), 주행 중에는 복원을 거부한다(50001). 운전자가 직접 확인하게 한다.
+                if (Effect.HEADLAMP in enabled) {
+                    if (stopReason == StopReason.GEAR) Banner("전조등 스위치를 직접 확인해 주세요", "주행 중에는 차가 전조등 되돌리기를 막아요. P로 바꾸면 앱이 다시 되돌려요",
+                        BannerKind.Warn, Modifier.testTag("note_headlamp"))
+                    else Banner("전조등 스위치를 확인해 주세요", "AUTO였다면 다시 AUTO로 맞춰 주세요", BannerKind.Info, Modifier.testTag("note_headlamp"))
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     HaechiView(if (ended) HaechiState.CHEER else HaechiState.REST, if (port) 260.dp else 360.dp, Modifier.align(Alignment.Center))

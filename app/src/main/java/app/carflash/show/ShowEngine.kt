@@ -122,6 +122,7 @@ class ShowEngine(
         if (Effect.WINDOW in enabled) parts += if (s == null || s.windows.all { (it ?: 0) == 0 }) "창문 닫힘" else "창문 원래 높이"
         if (Effect.WIPER in enabled) parts += if (s?.wiper == null || s.wiper == WiperMode.OFF) "와이퍼 끔" else "와이퍼 원래대로"
         if (Effect.FAN in enabled) parts += "송풍 원래 단"
+        if (Effect.HEADLAMP in enabled) parts += if (s == null || (s.lowBeam ?: "OFF") == "OFF" && (s.tailLamp ?: "OFF") == "OFF") "전조등 끔" else "전조등 원래대로"
         return parts.joinToString(" · ").ifEmpty { "바뀐 것 없음" }
     }
 
@@ -160,7 +161,8 @@ class ShowEngine(
         _state.value = EngineState.Countdown(show, song, ((startAt - SystemClock.elapsedRealtime() + 999) / 1000).toInt().coerceAtLeast(1), startAt, enabled, group)
         job?.cancel()
         job = scope.launch {
-            snapshot = vehicle.snapshot()
+            // 전조등을 쓰지 않는 플래시몹은 전조등 스위치를 되돌리지도 않는다(운전자가 바꾼 값을 덮지 않게)
+            snapshot = vehicle.snapshot().let { if (Effect.HEADLAMP in enabled) it else it.copy(lowBeam = null, tailLamp = null) }
             snapshot?.let { savePending(it) }
             lastRestored = restoreSummary(enabled, snapshot)
             prepare(song, sound)
@@ -190,12 +192,12 @@ class ShowEngine(
                 val beat = (pos / 1000.0 * song.bpm / 60.0).toInt()
                 val shift = group?.mySlot ?: 0
                 val f = if (pos / 1000.0 < song.musicSec) Timeline.frame(song, plans, beat, enabled).let { fr ->
-                    if (shift > 0 && Effect.LIGHT in enabled) fr.copy(zones = Timeline.frame(song, plans, (beat - shift).coerceAtLeast(0), enabled).zones) else fr
+                    if (shift > 0) Timeline.frame(song, plans, (beat - shift).coerceAtLeast(0), enabled).let { d -> fr.copy(zones = d.zones, lamp = d.lamp) } else fr
                 } else null
                 if (f != null && f.beat != last?.beat) {
                     apply(f, last)
                     last = f
-                    if (beat % 4 == 0) log("SHOW bar=${beat / 4} sec=${f.section} zone0=#%06X bright=${f.brightness} win=${f.windows} wiper=${f.wiper} fan=${f.fan}".format(f.zones[0] and 0xFFFFFF))
+                    if (beat % 4 == 0) log("SHOW bar=${beat / 4} sec=${f.section} zone0=#%06X bright=${f.brightness} win=${f.windows} wiper=${f.wiper} fan=${f.fan} lamp=${f.lamp}".format(f.zones[0] and 0xFFFFFF))
                 }
                 val now = SystemClock.elapsedRealtime()
                 if (now - uiAt >= 100) {
@@ -254,6 +256,7 @@ class ShowEngine(
         }
         if (caps.wiper && (prev == null || prev.wiper != f.wiper)) vehicle.setWiper(f.wiper)
         if (caps.fan && f.fan > 0 && (prev == null || prev.fan != f.fan)) vehicle.setFan(f.fan.coerceAtMost(caps.fanMax))
+        if (caps.headlamp && f.lamp != null && (prev == null || prev.lamp != f.lamp)) vehicle.setLamp(f.lamp)
     }
 
     private fun finish() {
@@ -317,6 +320,7 @@ class ShowEngine(
         fun arr(l: List<Int?>) = org.json.JSONArray(l.map { it ?: org.json.JSONObject.NULL })
         val o = org.json.JSONObject().put("ambient", arr(s.ambient)).put("brightness", arr(s.brightness)).put("windows", arr(s.windows))
             .put("wiper", s.wiper?.name ?: org.json.JSONObject.NULL).put("fan", s.fan ?: org.json.JSONObject.NULL)
+            .put("lowBeam", s.lowBeam ?: org.json.JSONObject.NULL).put("tailLamp", s.tailLamp ?: org.json.JSONObject.NULL)
         prefs.edit().putString("pending", o.toString()).commit()
     }
 
@@ -328,7 +332,8 @@ class ShowEngine(
             val o = org.json.JSONObject(txt)
             fun ints(k: String) = o.getJSONArray(k).let { a -> (0 until a.length()).map { if (a.isNull(it)) null else a.getInt(it) } }
             val s = VehicleSnapshot(ints("ambient"), ints("brightness"), ints("windows"),
-                if (o.isNull("wiper")) null else WiperMode.valueOf(o.getString("wiper")), if (o.isNull("fan")) null else o.getInt("fan"))
+                if (o.isNull("wiper")) null else WiperMode.valueOf(o.getString("wiper")), if (o.isNull("fan")) null else o.getInt("fan"),
+                lowBeam = if (o.isNull("lowBeam")) null else o.optString("lowBeam"), tailLamp = if (o.isNull("tailLamp")) null else o.optString("tailLamp"))
             log("SHOW recover pending restore $s")
             vehicle.restore(s)
         } catch (e: Exception) {

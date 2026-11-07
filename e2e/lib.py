@@ -234,14 +234,20 @@ def fresh(install_apk=True, onboard=True):
 
 
 def baseline():
-    """시험 전 차를 정해진 상태로: 보라 30%, 창문 닫힘, 와이퍼 끔, 송풍 3단."""
+    """시험 전 차를 정해진 상태로: 보라 30%, 창문 닫힘, 와이퍼 끔, 송풍 3단, 전조등 끔."""
     console("PUT", "/vehicle/body?ambient_color=%23aa00ff")
     console("PUT", "/vehicle/body?ambient_brightness=30")
     for k in ("window_fl", "window_fr", "window_rl", "window_rr"):
         console("PUT", f"/vehicle/body?{k}=0")
     console("PUT", "/vehicle/body?front_wiper=Off")
     console("PUT", "/vehicle/hvac?fan_speed=3")
+    lamp_mode("Off")
     time.sleep(0.5)
+
+
+def lamp_mode(v):
+    """외부 조명 스위치: Off | Auto | Position(미등) | LowBeam(전조등)"""
+    return console("PUT", f"/vehicle/lights?feature=headlamp_mode&value={v}")
 
 
 def car():
@@ -256,6 +262,7 @@ def car():
         "fan": s["hvac"]["fan_speed"],
         "gear": s["gear"]["actual"]["value"],
         "soc": s.get("ev_battery", {}).get("state_of_charge"),
+        "lamp": s.get("lights", {}).get("headlamp_mode"),
     }
 
 

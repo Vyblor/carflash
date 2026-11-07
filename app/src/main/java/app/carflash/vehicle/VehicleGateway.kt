@@ -7,6 +7,12 @@ enum class Gear { P, R, N, D, UNKNOWN }
 
 enum class WiperMode { OFF, LOW, HIGH }
 
+/**
+ * 외부 조명 스위치(Pleos Light: 전조등 LowBeam + 미등 TailLamp). 차는 셋 중 하나만 고른다:
+ * 미등을 켜면 전조등이 꺼지고, 전조등을 끄면 미등도 꺼진다(에뮬레이터 시험 2026-11-07). P단에서만 쓸 수 있다(D단 50001).
+ */
+enum class LampMode { OFF, TAIL, LOW }
+
 /** 이 차에서 쓸 수 있는 효과. check() 결과로 채운다. */
 data class VehicleCaps(
     val ambientZones: Int,
@@ -15,6 +21,8 @@ data class VehicleCaps(
     val fan: Boolean,
     val fanMax: Int = 8,
     val windowMax: Int = 10,
+    /** 전조등·미등 스위치 쓰기 가능 */
+    val headlamp: Boolean = false,
 ) {
     val light get() = ambientZones > 0
     val window get() = windows > 0
@@ -27,6 +35,9 @@ data class VehicleSnapshot(
     val windows: List<Int?>,
     val wiper: WiperMode?,
     val fan: Int?,
+    /** 전조등·미등 스위치 원래 값(LightSwitch 이름: OFF/ON/AUTOMATIC/DAYTIME_RUNNING). null = 모름 또는 손대지 않음 */
+    val lowBeam: String? = null,
+    val tailLamp: String? = null,
 )
 
 /**
@@ -50,6 +61,7 @@ interface VehicleGateway {
     fun setWindow(index: Int, position: Int)
     fun setWiper(mode: WiperMode)
     fun setFan(level: Int)
+    fun setLamp(mode: LampMode)
 
     suspend fun snapshot(): VehicleSnapshot
     fun restore(s: VehicleSnapshot)

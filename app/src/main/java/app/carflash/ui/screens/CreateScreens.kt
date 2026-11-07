@@ -49,9 +49,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.carflash.data.Effect
+import app.carflash.data.has
 import app.carflash.data.Show
 import app.carflash.data.Song
 import app.carflash.haechi.HaechiState
+import app.carflash.show.LampPattern
 import app.carflash.show.Pattern
 import app.carflash.show.SectionPlan
 import app.carflash.show.Timeline
@@ -60,7 +62,6 @@ import app.carflash.ui.components.AppHead
 import app.carflash.ui.components.Banner
 import app.carflash.ui.components.BannerKind
 import app.carflash.ui.components.BtnKind
-import app.carflash.ui.components.CarMap
 import app.carflash.ui.components.CfButton
 import app.carflash.ui.components.CodeDisplay
 import app.carflash.ui.components.HaechiView
@@ -88,6 +89,7 @@ class Draft(show: Show, plans: List<SectionPlan>) {
         if (plans.any { it.window > 0 }) add(Effect.WINDOW)
         if (plans.any { it.wiper != WiperMode.OFF }) add(Effect.WIPER)
         if (plans.any { it.fan > 0 }) add(Effect.FAN)
+        if (plans.any { it.lamp != LampPattern.NONE }) add(Effect.HEADLAMP)
     }
 
     fun set(bar: Int, f: (SectionPlan) -> SectionPlan) {
@@ -229,6 +231,13 @@ private fun blocksFor(e: Effect, palette: List<Int>): List<Block> {
             Block("fan_2", "약하게 2단", emptyList()) { it.copy(fan = 2) },
             Block("fan_5", "강하게 5단", emptyList()) { it.copy(fan = 5) },
         )
+        Effect.HEADLAMP -> listOf(
+            Block("lamp_none", "그대로", emptyList()) { it.copy(lamp = LampPattern.NONE) },
+            Block("lamp_tail", "미등 켜기", emptyList()) { it.copy(lamp = LampPattern.TAIL) },
+            Block("lamp_low", "전조등 켜기", emptyList()) { it.copy(lamp = LampPattern.LOW) },
+            Block("lamp_blink", "전조등 깜빡", emptyList()) { it.copy(lamp = LampPattern.BLINK) },
+            Block("lamp_tail_blink", "미등 깜빡", emptyList()) { it.copy(lamp = LampPattern.TAIL_BLINK) },
+        )
     }
 }
 
@@ -237,6 +246,7 @@ private fun cellDesc(e: Effect, p: SectionPlan): String = when (e) {
     Effect.WINDOW -> "${p.window}"
     Effect.WIPER -> p.wiper.name
     Effect.FAN -> "${p.fan}"
+    Effect.HEADLAMP -> p.lamp.name
 }
 
 private fun swatchBrush(cols: List<Int>): Brush? = when {
@@ -252,6 +262,7 @@ private fun Cell(e: Effect, p: SectionPlan, selected: Boolean, modifier: Modifie
         Effect.WINDOW -> p.window > 0
         Effect.WIPER -> p.wiper != WiperMode.OFF
         Effect.FAN -> p.fan > 0
+        Effect.HEADLAMP -> p.lamp != LampPattern.NONE
     }
     val bg: Modifier = when {
         e == Effect.LIGHT && p.pattern == Pattern.OFF -> Modifier.background(Color.Black)
@@ -272,6 +283,7 @@ private fun Cell(e: Effect, p: SectionPlan, selected: Boolean, modifier: Modifie
             Effect.WINDOW -> if (p.window > 0) "${p.window}%" else ""
             Effect.WIPER -> if (p.wiper != WiperMode.OFF) "천천히" else ""
             Effect.FAN -> if (p.fan > 0) "${p.fan}단" else ""
+            Effect.HEADLAMP -> when (p.lamp) { LampPattern.NONE -> ""; LampPattern.TAIL -> "미등"; LampPattern.LOW -> "켜기"; LampPattern.BLINK -> "깜빡"; LampPattern.TAIL_BLINK -> "미등 깜빡" }
         }
         if (t.isNotEmpty()) Text(t, style = CfType.label, color = Cf.text)
         else if (!filled) Text("·", style = CfType.title, color = Cf.textOff)
@@ -289,7 +301,7 @@ fun EditorScreen(
 ) {
     val port = LocalLayout.current == Layout.Portrait
     val tracks = Effect.entries.filter { e ->
-        caps == null || when (e) { Effect.LIGHT -> caps.light; Effect.WINDOW -> caps.window; Effect.WIPER -> caps.wiper; Effect.FAN -> caps.fan }
+        caps == null || caps.has(e)
     }
     val pages = (song.bars + 3) / 4
     val page = draft.page.coerceIn(0, pages - 1)
@@ -388,8 +400,7 @@ fun EditorScreen(
                 Column(Modifier.width(340.dp).fillMaxHeight().padding(bottom = 32.dp), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     val f = Timeline.frame(song, draft.plans, selBar * 4, tracks.toSet())
-                    val z = f.zones.map { if (it < 0) null else it }
-                    CarMap(z, f.windows.map { it.coerceAtLeast(0) }, f.fan.takeIf { it > 0 }, 230.dp)
+                    LookMap(lookOf(f, tracks.toSet()), tracks.toSet(), 230.dp)
                     Text("${selBar + 1}마디 첫 박의 차 모습", style = CfType.caption, color = Cf.text2)
                     Spacer(Modifier.weight(1f))
                     if (used.isEmpty()) Text("칸을 하나 이상 채우면 저장할 수 있어요", style = CfType.caption, color = Cf.text3)

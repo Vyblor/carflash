@@ -126,19 +126,6 @@ fun ProgressBar(fraction: Float, modifier: Modifier = Modifier) {
 fun mmss(ms: Long): String { val s = (ms / 1000).toInt(); return "%d:%02d".format(s / 60, s % 60) }
 
 @Composable
-fun CueChip(text: String, color: Int? = null, icon: ImageVector? = null) {
-    Row(
-        Modifier.clip(RoundedCornerShape(Cf.rMd)).background(Cf.surface2).padding(horizontal = 24.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        if (color != null) Box(Modifier.size(20.dp).clip(CircleShape).background(Color(0xFF000000.toInt() or color)))
-        if (icon != null) Icon(icon, null, tint = Cf.text, modifier = Modifier.size(32.dp))
-        Text(text, style = CfType.label, color = Cf.text)
-    }
-}
-
-@Composable
 fun CodeDisplay(code: String, modifier: Modifier = Modifier) {
     Text("${code.take(3)} ${code.drop(3)}", style = CfType.display, color = Cf.text,
         modifier = modifier.testTag("show_code").semantics { contentDescription = "code:$code" })

@@ -182,7 +182,8 @@ class MainActivity : ComponentActivity() {
                                 Effect.LIGHT.takeIf { caps?.light != false },
                                 Effect.WINDOW.takeIf { caps?.window != false },
                                 Effect.WIPER.takeIf { caps?.wiper != false },
-                                Effect.FAN.takeIf { caps?.fan != false })
+                                Effect.FAN.takeIf { caps?.fan != false },
+                                Effect.HEADLAMP.takeIf { caps?.headlamp != false })
                             val plans = if (fromPreset) expandPerBar(song, Designer.auto(song, pal, fx))
                                 else blankPlans(song)
                             val show = Show("m_${System.currentTimeMillis()}", "내 ${song.title}", song.id, fx, null, grad, pal,

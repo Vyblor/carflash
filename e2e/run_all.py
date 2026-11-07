@@ -1,11 +1,11 @@
-"""전체 회귀: S1~S5 시험과 S6 세로·성능 시험을 차례로 돌린다. 첫 시험만 APK를 설치한다."""
+"""전체 회귀: S1~S5, S6 세로·성능, S7 전조등 시험을 차례로 돌린다. 첫 시험만 APK를 설치한다."""
 import os
 import subprocess
 import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SUITES = ["s1_onboard_home.py", "s2_show.py", "s3_safety.py", "s4_create_code.py", "s5_group.py", "s6_portrait.py", "s6_perf.py"]
+SUITES = ["s1_onboard_home.py", "s2_show.py", "s3_safety.py", "s4_create_code.py", "s5_group.py", "s6_portrait.py", "s6_perf.py", "s7_headlamp.py"]
 
 
 def main():

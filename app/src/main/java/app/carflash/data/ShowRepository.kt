@@ -7,7 +7,12 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /** 효과 종류. 아이콘·토글·차종 차이 표시에 같이 쓴다. */
-enum class Effect(val label: String) { LIGHT("조명"), WINDOW("창문"), WIPER("와이퍼"), FAN("송풍") }
+enum class Effect(val label: String) { LIGHT("조명"), WINDOW("창문"), WIPER("와이퍼"), FAN("송풍"), HEADLAMP("전조등") }
+
+/** 이 차가 이 효과를 쓸 수 있나. */
+fun app.carflash.vehicle.VehicleCaps.has(e: Effect): Boolean = when (e) {
+    Effect.LIGHT -> light; Effect.WINDOW -> window; Effect.WIPER -> wiper; Effect.FAN -> fan; Effect.HEADLAMP -> headlamp
+}
 
 data class SongSection(val name: String, val bar: Int, val bars: Int)
 
@@ -70,13 +75,13 @@ class ShowRepository(private val context: Context) {
     fun song(id: String) = songs.firstOrNull { it.id == id }
 
     val presets: List<Show> = listOf(
-        Show("p_camp", "캠핑장의 밤", "camp_party", setOf(Effect.LIGHT, Effect.WINDOW, Effect.FAN), "covers/p_camp.jpg",
+        Show("p_camp", "캠핑장의 밤", "camp_party", setOf(Effect.LIGHT, Effect.WINDOW, Effect.FAN, Effect.HEADLAMP), "covers/p_camp.jpg",
             0xFFFF8A00 to 0xFFA05CFF, listOf(0xFF8A00, 0xFFD60A, 0xFF2D55, 0xA05CFF), code = "206518"),
         Show("p_romance", "로맨틱 드라이브", "romantic_drive", setOf(Effect.LIGHT, Effect.WINDOW), "covers/p_romance.jpg",
             0xFFFF4FD8 to 0xFF2F6BFF, listOf(0xFF4FD8, 0xFF2D55, 0xA05CFF, 0x2F6BFF), code = "731204"),
         Show("p_night", "감미로운 밤", "sweet_night", setOf(Effect.LIGHT, Effect.FAN), "covers/p_night.jpg",
             0xFF2F6BFF to 0xFFA05CFF, listOf(0x2F6BFF, 0xA05CFF, 0x00E5FF, 0xFFFFFF), code = "482915"),
-        Show("p_birthday", "생일 축하 플래시몹", "birthday_party", setOf(Effect.LIGHT, Effect.WIPER, Effect.FAN), "covers/p_birthday.jpg",
+        Show("p_birthday", "생일 축하 플래시몹", "birthday_party", setOf(Effect.LIGHT, Effect.WIPER, Effect.FAN, Effect.HEADLAMP), "covers/p_birthday.jpg",
             0xFFFF2D55 to 0xFFFFD60A, listOf(0xFF2D55, 0xFFD60A, 0x30D158, 0x00E5FF, 0xFF4FD8), code = "120120"),
         Show("p_rain", "비 오는 주차장", "rainy_parking", setOf(Effect.LIGHT, Effect.WIPER), "covers/p_rain.jpg",
             0xFF00E5FF to 0xFF2F6BFF, listOf(0x00E5FF, 0x2F6BFF, 0x30D158, 0xFFFFFF), code = "880088"),

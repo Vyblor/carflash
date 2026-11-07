@@ -2,6 +2,7 @@ package app.carflash.show
 
 import app.carflash.data.Effect
 import app.carflash.data.Song
+import app.carflash.vehicle.LampMode
 import app.carflash.vehicle.WiperMode
 
 /** 조명 움직임 모양. 편집기(C2)에서 고른다. */
@@ -19,6 +20,18 @@ enum class Pattern(val label: String) {
 }
 
 /**
+ * 전조등·미등 움직임. 정차(P) 중에만 차가 받아 준다. 깜빡임은 한 박자마다 바뀌어 140 BPM에서도 초당 약 1.2회다.
+ * BLINK는 전조등↔미등이라 완전히 꺼지는 순간이 없다.
+ */
+enum class LampPattern(val label: String) {
+    NONE("그대로"),
+    TAIL("미등 켜기"),
+    LOW("전조등 켜기"),
+    BLINK("전조등 깜빡"),
+    TAIL_BLINK("미등 깜빡"),
+}
+
+/**
  * 곡 구간 하나의 연출. 창문은 0~60(%), 송풍은 0(그대로)~8단.
  * 창문 상한 60%는 안전 약속 3("창문이 움직일 수 있어요")에 맞춘 카플래시 자체 한도다.
  */
@@ -31,9 +44,13 @@ data class SectionPlan(
     val window: Int,
     val wiper: WiperMode,
     val fan: Int,
+    val lamp: LampPattern = LampPattern.NONE,
 ) {
     val endBar get() = bar + bars
 }
+
+/** "지금 움직이는 것" 한 줄. 효과마다 하나. 문구는 구간 안에서 바뀌지 않는다(박자마다 바뀌면 접근성 이벤트가 쏟아진다). */
+data class Cue(val effect: Effect, val text: String)
 
 /** 한 박자에 차가 가져야 할 모습. 차량 엔진이 이전 박자와 달라진 값만 보낸다. */
 data class Frame(
@@ -44,7 +61,8 @@ data class Frame(
     val windows: List<Int>,        // 4개, 0~60 %
     val wiper: WiperMode,
     val fan: Int,                  // 0 = 손대지 않음
-    val cues: List<String>,        // A5 "지금 움직이는 것"
+    val lamp: LampMode?,           // null = 손대지 않음
+    val cues: List<Cue>,           // A5 "지금 움직이는 것"
 )
 
 const val WINDOW_LIMIT = 60
@@ -72,6 +90,11 @@ object Designer {
                 fan = if (Effect.FAN !in effects) 0 else when {
                     high -> 5; n.startsWith("build") -> 4; n.startsWith("verse") -> 2; else -> 1
                 },
+                lamp = if (Effect.HEADLAMP !in effects) LampPattern.NONE else when {
+                    high -> LampPattern.BLINK
+                    n.startsWith("build") -> LampPattern.TAIL_BLINK
+                    else -> LampPattern.TAIL
+                },
             )
         }
     }
@@ -95,7 +118,7 @@ object Timeline {
 
     fun frame(song: Song, plans: List<SectionPlan>, beat: Int, enabled: Set<Effect>): Frame {
         val bar = beat / 4
-        val plan = planAt(plans, bar) ?: return Frame(beat, "", List(5) { 0xFFFFFF }, 50, List(4) { 0 }, WiperMode.OFF, 0, emptyList())
+        val plan = planAt(plans, bar) ?: return Frame(beat, "", List(5) { 0xFFFFFF }, 50, List(4) { 0 }, WiperMode.OFF, 0, null, emptyList())
         val cols = plan.colors.ifEmpty { listOf(0xFFFFFF) }
         val zones: List<Int>
         var bright: Int
@@ -131,15 +154,25 @@ object Timeline {
             windows = if (Effect.WINDOW in enabled) windows else List(4) { -1 },
             wiper = if (Effect.WIPER in enabled) plan.wiper else WiperMode.OFF,
             fan = if (Effect.FAN in enabled) plan.fan else 0,
+            lamp = if (Effect.HEADLAMP in enabled) lampAt(plan.lamp, beat) else null,
             cues = emptyList(),
         )
         return fx.copy(cues = describe(plan, fx))
     }
 
-    private fun describe(plan: SectionPlan, f: Frame): List<String> = buildList {
-        if (f.brightness >= 0) add(plan.pattern.label)
-        if (f.windows.any { it > 0 }) add("창문 ${f.windows.max()}%")
-        if (f.wiper != WiperMode.OFF) add("와이퍼 천천히")
-        if (f.fan > 0) add("송풍 ${f.fan}단")
+    fun lampAt(p: LampPattern, beat: Int): LampMode? = when (p) {
+        LampPattern.NONE -> null
+        LampPattern.TAIL -> LampMode.TAIL
+        LampPattern.LOW -> LampMode.LOW
+        LampPattern.BLINK -> if (beat % 2 == 0) LampMode.LOW else LampMode.TAIL
+        LampPattern.TAIL_BLINK -> if (beat % 2 == 0) LampMode.TAIL else LampMode.OFF
+    }
+
+    private fun describe(plan: SectionPlan, f: Frame): List<Cue> = buildList {
+        if (f.brightness >= 0) add(Cue(Effect.LIGHT, plan.pattern.label))
+        if (f.windows.any { it > 0 }) add(Cue(Effect.WINDOW, "최대 ${f.windows.max()}% 열림"))
+        if (f.wiper != WiperMode.OFF) add(Cue(Effect.WIPER, "천천히 움직임"))
+        if (f.fan > 0) add(Cue(Effect.FAN, "${f.fan}단"))
+        if (f.lamp != null) add(Cue(Effect.HEADLAMP, plan.lamp.label))
     }
 }

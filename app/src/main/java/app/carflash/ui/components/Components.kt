@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Air
+import androidx.compose.material.icons.rounded.Highlight
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.Sensors
 import androidx.compose.material.icons.rounded.Window
@@ -66,6 +67,7 @@ fun Effect.icon(): ImageVector = when (this) {
     Effect.WINDOW -> Icons.Rounded.Window
     Effect.WIPER -> Icons.Rounded.Sensors
     Effect.FAN -> Icons.Rounded.Air
+    Effect.HEADLAMP -> Icons.Rounded.Highlight
 }
 
 /** 앱 상단줄(높이 112). 제목 + 기어 칩 + 오른쪽 버튼. */
