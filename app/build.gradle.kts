@@ -1,6 +1,17 @@
+import java.util.Properties
+
 plugins {
   id("com.android.application")
   id("org.jetbrains.kotlin.android")
+}
+
+// Release signing key lives outside the repo. Default: ~/.android/carflash/keystore.properties
+// (storeFile, storePassword, keyAlias, keyPassword); override with CARFLASH_KEYSTORE_PROPERTIES.
+// Without it the release build is signed with the debug key so it still installs (not for submission).
+val releaseKeyProps = Properties().apply {
+  val f = file(System.getenv("CARFLASH_KEYSTORE_PROPERTIES")
+    ?: "${System.getProperty("user.home")}/.android/carflash/keystore.properties")
+  if (f.exists()) f.inputStream().use { load(it) }
 }
 
 android {
@@ -13,10 +24,25 @@ android {
     minSdk = 28
     targetSdk = 34
     versionCode = 1
-    versionName = "0.1.0"
+    versionName = "1.0.0"
+  }
+  signingConfigs {
+    if (releaseKeyProps.getProperty("storeFile") != null) {
+      create("release") {
+        storeFile = file(releaseKeyProps.getProperty("storeFile"))
+        storePassword = releaseKeyProps.getProperty("storePassword")
+        keyAlias = releaseKeyProps.getProperty("keyAlias")
+        keyPassword = releaseKeyProps.getProperty("keyPassword")
+      }
+    }
   }
   buildTypes {
-    release { isMinifyEnabled = false }
+    release {
+      isMinifyEnabled = true
+      isShrinkResources = true
+      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+      signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+    }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17
